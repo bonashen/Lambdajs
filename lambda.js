@@ -37,12 +37,12 @@ define(null, [], function () {
     };
 
     lambda.fn = lambda.prototype = {
-        init: function (condition, isClosure) {
+        init: function (/*String*/condition, /*Boolean*/isClosure) {
             this.condition = condition;
             this.isClosure = isClosure;
             this.clear();
         },
-        compile: function (condition, isClosure) {
+        compile: function (/*String*/condition, /*Boolean*/isClosure) {
             var fnCreate = function (body) {
                 return Function.apply(null, body);
             };
@@ -56,11 +56,11 @@ define(null, [], function () {
             }
             return fnCreate(fnDefine);
         },
-        isLambda: function (condition) {
+        isLambda: function (/*String*/condition) {
             condition = condition || this.condition;
             return condition ? condition.split("=>").length >= 2 : false;
         },
-        parse: function (condition, isClosure) {
+        parse: function (/*String*/condition, /*Boolean*/isClosure) {
             var cStr = (condition || this.condition).split('=>');
             isClosure = isClosure || this.isClosure || false;
 
