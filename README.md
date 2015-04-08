@@ -1,8 +1,9 @@
 # Lambda.js
-支持dojo AMD加载规范，实现动态编译Lambda规范字符串表达式为匿名函数，支持闭包函数体。
+支持dojo AMD加载规范，实现动态编译Lambda规范字符串表达式为匿名函数，支持闭包函数体,具体请查看[博客](http://www.bonashen.com/post/develop/ria-develop/2015-04-08-javascript-lambda-bian-yi-qi-shi-xian)。
 
 
 - 表达式应用
+
 ```javascript
 var add = function(x,y){return x+y;}               //通常写法
 var add = lambda("(x,y)=>x+y");                   //转换为lambda
@@ -18,6 +19,9 @@ return x+y ;
 ```javascript
 var fromq= JSLINQ([1, 2, 3]).Where(lambda("o=>o>2"));
 ```
+
+----
+
 - 函数体，即闭包（Closure）
 ```javascript
 var each = function(callback){
