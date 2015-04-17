@@ -58,3 +58,17 @@ var People =
 var fromq= JSLINQ(People).Each(lambda("o=>o.Name = o.FirstName+' '+o.LastName",true));
 fromq = fromq.Select(lambda("o=>{Name:o.FirstName+' '+o.LastName}"));
 ```
+
+- 缓存功能
+Lambda增加了Cache功能，所有经Lambda编译后的表达式都会在后台缓存，如有相同的表达式时，Lambda只进行分析后找到缓存的匿名方法实现并返回，这样减少了Function的调用，使速度更快，另还针对缓存的Lambda表达式进行了使用次数的统计，这样可以查看某个表达式的使用情况。
+
+```javascript
+var src = "(o,i)=>console.log(o)";
+var afn = lambda(src), bfn = lambda(src);
+console.log(afn === bfn); //true
+var cache = lambda.getCache();
+for (var i = 0; i < cache.length; i++) {
+    console.log("lambda:", cache[i].lambda, "  useCount:", cache[i].num);
+}
+
+```
