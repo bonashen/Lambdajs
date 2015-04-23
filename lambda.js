@@ -35,6 +35,13 @@ define(null, [], function () {
             }
             return ret;
         },
+        isNumber = function (str) {
+            return /^[0-9]+$/.exec(str) ? true : false;
+        },
+        isFunction = function (it) {
+            return it && (it instanceof Function || typeof(it) == 'function');
+        },
+
         dppiUtils = {     //dppiUtils.invoking(callee,clause,[]);
             getFunctionArgumentList: function (fn) {
                 if (isFunction(fn)) {
@@ -43,26 +50,30 @@ define(null, [], function () {
                     return ret[1].split(",");
                 } else return null;
             },
-            getCallerExtValue: function (args) {
-                var fn = args.callee;
-                var defNames = this.getFunctionArgumentList(fn);
-                var callParams = Array.prototype.slice.call(args);
-                var extCount = callParams.length - defNames.length;
+            getCallerExtValues: function (caller) {
+                var extCount = this.getCallerExtCount(caller);
+                var defNames = this.getFunctionArgumentList(caller);
                 var extValues = [];
                 if (extCount) {
-                    extValues = Array.prototype.slice.call(args, defNames.length);
+                    extValues = Array.prototype.slice.call(caller.arguments, defNames.length);
                 }
                 return extValues;
             },
-            invoking: function (/*Function*/fnCallee, /*Function*/clause, /*Array*/params, _self) {
-                var extValues = this.getCallerExtValue(fnCallee.arguments, clause);
+            getCallerExtCount: function (caller) {
+                var fn = caller;
+                var defNames = this.getFunctionArgumentList(fn);
+                var callParams = Array.prototype.slice.call(fn.arguments);
+                return callParams.length - defNames.length;
+            },
+            invoking: function (/*Function*/fnCaller, /*Function*/clause, /*Array*/params, _self) {
+                var extValues = this.getCallerExtValues(fnCaller, clause);
                 return clause.apply(_self, params.concat(extValues));
             }
         };
 
-    //cache
+//cache
     var cache = {},
-    //config
+//config
         config = {
             isDebug: false,
             //option = {condition:condition,isClosure:isClosure}
@@ -82,6 +93,8 @@ define(null, [], function () {
             this.isClosure = isClosure;
             //this.clear();
         },
+        //compiled function in strict mode or not.
+        useStrict: true,
         compile: function (/*String*/condition, /*Boolean*/isClosure) {
 
             var _this = this,
@@ -108,7 +121,7 @@ define(null, [], function () {
                 };
             var fnDefine = [];
             if (arguments.length == 0 && _this.body && _this.names) {
-                fnDefine = _this.names.concat(["'use strict';\n"].concat(_this.body).join(""));
+                fnDefine = _this.names.concat([_this.useStrict ? "'use strict';\n" : "\n"].concat(_this.body).join(""));
                 return fnCreate(fnDefine);
             }
             _this.parse(condition, isClosure);
@@ -118,9 +131,9 @@ define(null, [], function () {
         },
         //version
         version: '20150417/01',
-
+        vendor: "bonashen.com",
         isLambda: function (/*String*/condition) {
-            return lambda.isLambda.call(this,condition);
+            return lambda.isLambda.call(this, condition);
         },
         parse: function (/*String*/condition, /*Boolean*/isClosure) {
             var trim = function (str) {
@@ -159,10 +172,11 @@ define(null, [], function () {
                     str.push(names);
                     str.push("){");
                     str.push(codeBody);
-                    str.push("}).call(this");
-                    if (names.length > 0)str.push(',');
-                    str.push(names);
-                    str.push(")");
+                    //str.push("}).call(this");
+                    //if (names.length > 0)str.push(',');
+                    //str.push(names);
+                    //str.push(")");
+                    str.push("}).apply(this,arguments)");
                     codeBody = str.join('');
                     //codeBody = " (function(" + names + "){" + codeBody + "}).call(this" + (names.length> 0 ? +("," + names) : "") + ")";
                     //console.log(codeBody);
@@ -196,7 +210,7 @@ define(null, [], function () {
         getLambdaCode: function () {
             var ret = "", body = this.getBody(), name = this.getNames();
             if (body.length > 0) {
-                body = body.slice(1, body.length - 1);
+                if (this.useStrict) body = body.slice(1, body.length - 1);
                 name = ["("].concat([name.join(",")]).concat([")=>"]);
                 ret = name.concat(body).join("");
             }
@@ -220,7 +234,7 @@ define(null, [], function () {
 
     lambda.fn.init.prototype = lambda.fn;
 
-    //static read lambda compile function cache.
+//static read lambda compile function cache.
     lambda.getCache = function () {
         var ret = [];
         for (var name in cache) {
@@ -241,14 +255,136 @@ define(null, [], function () {
         return lambda(condition, isClosure);
     };
 
-    lambda.isLambda= function (/*String*/condition) {
+    lambda.convert = function (/*String*/omittingArgsExp, /*Boolean*/isClosure) {
+
+        var rxIds = /"(?:[^"]|\\")*"|'(?:[^']|\\')*'|[\$@\w_#]+/g;
+        var str = omittingArgsExp;
+
+        var totalExpArgsCount = function (rxIds, str) {
+            var m, hint = [], ret = 0;
+            rxIds.lastIndex = 0;
+            var check = function (s, hint) {
+                var ch = s.charAt(0);
+                if (ch == "$") {
+                    var l = s.length;
+                    if (l >= 2 && s.charAt(1) == "$") {
+                        hint[1] = 1;
+                    } else {
+                        hint[0] = 1;
+                    }
+                }
+                //else if (ch == "@") {
+                //    hint[0] = 1;
+                //}
+                else if (ch == "#" && isNumber(s.substr(1))) {
+                    hint[parseInt(s.substr(1)) + 1] = 1;
+                }
+            };
+            while (m = rxIds.exec(str)) {
+                var s = m[0];
+                check(s, hint);
+            }
+            ret = hint.length;
+            hint = null;
+            return ret;
+        };
+
+        var defArgs = [], l = totalExpArgsCount(rxIds, str), i = 0;
+        for (; i < l; i++) {
+            defArgs[i] = "_p_.p" + i;
+        }
+
+        rxIds.lastIndex = 0;
+        str = str.replace(rxIds, function (s) {
+            var ch = s.charAt(0);
+            if (ch == "$") {
+                var l = s.length;
+                if (l >= 2 && s.charAt(1) == "$") {
+                    return defArgs[1];
+                } else {
+                    return defArgs[0];
+                }
+            }
+            else if (ch == "@") {
+                //return defArgs[defArgs.length - 1];
+                return "_p_.right";
+            }
+            else if (ch == "#" && isNumber(s.substr(1))) {
+                return defArgs[(parseInt(s.substr(1)) + 1)];
+            }
+            return s;
+        });
+        var lm = lambda.parse("()=>0");
+        lm.useStrict = false;
+
+        str = isClosure ? "(function(){ " + str + " ;}).apply(this,arguments)" : str;
+
+        var body = []
+            .concat("return (")
+            .concat('function (){\n')
+            .concat('var fn = function(){\n')
+            .concat('var getParams = function(){\n')
+            .concat('var param = {};\n')
+            .concat('for(var i=0;i<fn.arguments.length;i++){\n')
+            .concat('param["p"+i]= fn.arguments[i];\n')
+            .concat(' }\n')
+            .concat('param[\'right\'] = fn.arguments[fn.arguments.length-1];\n')
+            .concat(' return param;\n')
+            .concat(' }; \n')
+            .concat('  var _p_ = getParams();\n')
+            .concat(['return ', str, '; \n'])       //insert code.
+            .concat(' };\n')
+            .concat('return fn.apply(this,arguments);\n')
+            .concat('}\n')
+            .concat(").apply(this,arguments)");
+
+        var lmBody = lm.getBody();
+        lmBody.length = 0;
+        for (i = 0; i < body.length; i++)lmBody[i] = body[i];
+
+        defArgs = lmBody = body = null;
+        return lm.compile();
+    };
+
+    lambda.isLambda = function (/*String*/condition) {
         condition = condition || this.condition;
         var oneArg = /^\s*(\w+)\s*=>(.+)$/;
         var manyArgs = /^\s*\(\s*([\w\s,]*)\s*\)\s*=>(.+)$/;
-        return (oneArg.exec(condition) || manyArgs.exec(condition))!==null;
+        return (oneArg.exec(condition) || manyArgs.exec(condition)) !== null;
     };
 
     lambda.config = config;
 
+    //lambda.dppiUtils = dppiUtils;
+
+//exports
+    (function () {
+        var platform;
+
+        var platformList = {
+            'nodejs': function () {
+                return typeof module !== 'undefined' && module.exports;
+            },
+            'web': function () {
+                return true;
+            }
+        };
+
+        for (var key in platformList) {
+            if (platformList[key]()) {
+                platform = key;
+                break;
+            }
+        }
+
+        if (platform == 'nodejs') {
+            module.exports = lambda;
+        } else {
+            window.lambda = lambda;
+        }
+
+    })();
+
     return lambda;
-});
+})
+;
