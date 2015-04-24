@@ -41,6 +41,9 @@ define(null, [], function () {
         isFunction = function (it) {
             return it && (it instanceof Function || typeof(it) == 'function');
         },
+        isString = function (it) {
+            return (typeof it == "string" || it instanceof String);
+        },
 
         dppiUtils = {     //dppiUtils.invoking(callee,clause,[]);
             getFunctionArgumentList: function (fn) {
@@ -66,7 +69,9 @@ define(null, [], function () {
                 return callParams.length - defNames.length;
             },
             invoking: function (/*Function*/fnCaller, /*Function*/clause, /*Array*/params, _self) {
-                var extValues = this.getCallerExtValues(fnCaller, clause);
+                var extValues = this.getCallerExtValues(fnCaller);
+                clause = lambda.isLambda(clause)?lambda(clause):clause;
+                if (_self && isString(clause))clause = _self[clause];
                 return clause.apply(_self, params.concat(extValues));
             }
         };
